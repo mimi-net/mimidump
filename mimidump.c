@@ -1,0 +1,238 @@
+#define APP_NAME		"Mimidump"
+#define APP_DESC		"Sniffer for the miminet using libpcap"
+#define APP_COPYRIGHT		"Copyright (c) 2024 Ilya Zelenechuk"
+#define APP_DISCLAIMER		"THERE IS ABSOLUTELY NO WARRANTY FOR THIS PROGRAM."
+
+#include <pcap.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#include<signal.h>
+#include <pthread.h>
+
+/* default snap length (maximum bytes per packet to capture) */
+#define SNAP_LEN 1518
+
+/* Max len interface name */
+#define IFSZ 16
+
+/* Max len of filename for the packet store */
+#define PCAP_FILENAME_SIZE 512
+
+/* Max number of packet to be captured */
+#define MAX_PACKET_CAPTURE 100
+
+/* Define thread info structure */
+struct thread_info
+{	
+	/* Arg for thread_start() */
+	pthread_t	thread_id;	/* ID returned from pthread_create() */
+	int		thread_num;	/* thread number */
+	pcap_t		*handler;	/* pcap handler */
+	pcap_dumper_t 	*pd;		/* pcap dump to file handler */
+	unsigned int	num_packets;	/* max number of packets to be captures */
+};
+
+struct thread_info  *tinfo;
+
+/*
+ * print help text
+ */
+void print_app_usage(void)
+{
+	printf("Usage: %s interface inout_pcap_file out_pcap_file\n", APP_NAME);
+	printf("\n");
+	printf("Options:\n");
+	printf("    interface		Listen on <interface> for packets.\n");
+	printf("    inout_pcap_file	Where to write IN/OUT raw packets.\n");
+	printf("    out_pcap_file	Where to write only OUT raw packets.\n");	
+	printf("\n");
+
+return;
+}
+
+/* Signal handler */
+void sig_handler(int signo)
+{
+	if (signo == SIGINT){
+
+		printf ("Got SIGINT. Call pcap_breakloop.\n");
+		pcap_breakloop(tinfo[0].handler);
+		pcap_breakloop(tinfo[1].handler);
+	}
+}
+
+static void *thread_handle_inout_packets (void * arg)
+{
+	struct thread_info *tinfo = arg;
+	
+	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (char *)tinfo->pd);
+	return 0;	
+}
+
+static void *thread_handle_out_packets (void * arg)
+{
+	struct thread_info *tinfo = arg;
+
+	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (char *)tinfo->pd);
+	return 0;
+}
+
+
+int main(int argc, char **argv)
+{
+	char dev[IFSZ];
+	char errbuf[PCAP_ERRBUF_SIZE];
+	pcap_t *handle_inout;
+	pcap_t *handle_out;
+	pcap_dumper_t *pd_inout;       			/* pointer to the dump file */
+	pcap_dumper_t *pd_out;       			/* pointer to the dump file */
+
+	char pcap_inout_filename[PCAP_FILENAME_SIZE];
+	char pcap_out_filename[PCAP_FILENAME_SIZE];
+
+	pthread_attr_t	attr;
+	size_t num_threads = 2;
+	int s;
+	void *res;
+
+
+	/* Set SIGINT handler */
+	if (signal(SIGINT, sig_handler) == SIG_ERR){
+		fprintf (stderr, "Can't catch SIGINT\n");
+		exit (EXIT_FAILURE);
+	}
+
+	/* check for capture device name on command-line */
+	if (argc < 4) {	
+		fprintf(stderr, "error: Invalid command-line options\n\n");
+		print_app_usage();
+		exit(EXIT_FAILURE);
+	}
+
+	if (strlen(argv[1]) > IFSZ) {
+		fprintf(stderr, "Invalid interface name.\n");
+		exit(EXIT_FAILURE);
+	}
+
+	if (strlen(argv[2]) > PCAP_FILENAME_SIZE){
+		fprintf(stderr, "Invalid filename len.\n");
+		exit(EXIT_FAILURE);
+	}
+
+	if (strlen(argv[3]) > PCAP_FILENAME_SIZE){
+		fprintf(stderr, "Invalid filename len.\n");
+		exit(EXIT_FAILURE);
+	}
+
+
+	strcpy(dev, argv[1]);
+
+	/* Making pcap filenames */
+	strcpy(pcap_inout_filename, argv[2]);
+
+	strcpy(pcap_out_filename, argv[3]);
+
+	/* open capture device */
+	handle_inout = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
+	if (handle_inout == NULL) {
+		fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
+		exit(EXIT_FAILURE);
+	}
+
+	handle_out = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
+	if (handle_out == NULL) {
+		fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
+		exit(EXIT_FAILURE);
+	}
+
+	/* set direction IN */
+	pcap_setdirection(handle_inout, PCAP_D_INOUT);
+	pcap_setdirection(handle_out, PCAP_D_OUT);
+
+	/*
+	 * Open dump device for writing packet capture data.
+	 */
+	if ((pd_inout = pcap_dump_open(handle_inout,pcap_inout_filename)) == NULL) {
+		fprintf (stderr, "Error opening savefile \"%s\" for writing: %s\n", 
+				pcap_inout_filename, pcap_geterr(handle_inout));
+		exit (EXIT_FAILURE);
+	}
+	
+	if ((pd_out = pcap_dump_open(handle_out,pcap_out_filename)) == NULL) {
+		fprintf (stderr, "Error opening savefile \"%s\" for writing: %s\n", 
+				pcap_out_filename, pcap_geterr(handle_out));
+		exit (EXIT_FAILURE);
+	}
+	
+
+	/* Init pthread attributes */
+	s = pthread_attr_init(&attr);
+	if (s != 0){
+		fprintf (stderr, "pthread_attr_init error\n");
+		exit (EXIT_FAILURE);
+	}
+
+	/* Allocate memory for pthread_create() arguments. */
+	tinfo = calloc(num_threads, sizeof(*tinfo));
+	if (tinfo == NULL){
+		fprintf (stderr, "Can't alloca memory (calloc) for tinfo structure");
+		exit (EXIT_FAILURE);
+	}
+
+
+	/* Start threads */
+	tinfo[0].thread_num = 1;
+	tinfo[0].handler = handle_inout;
+	tinfo[0].num_packets = MAX_PACKET_CAPTURE;
+	tinfo[0].pd = pd_inout;
+	s = pthread_create(&tinfo[0].thread_id, &attr, &thread_handle_inout_packets, &tinfo[0]);
+
+	if (s != 0){
+		fprintf (stderr, "Can't create thread_handle_inout_packets\n");
+		exit (EXIT_FAILURE);
+	}
+
+	tinfo[1].thread_num = 2;
+	tinfo[1].handler = handle_out;
+	tinfo[1].num_packets = MAX_PACKET_CAPTURE;
+	tinfo[1].pd = pd_out;
+	s = pthread_create(&tinfo[1].thread_id, &attr, &thread_handle_out_packets, &tinfo[1]);
+
+	if (s != 0){
+		fprintf (stderr, "Can't create thread_handle_out_packets\n");
+		exit (EXIT_FAILURE);
+	}
+
+	/* Now join with each thread, and display its returned value. */
+
+	s = pthread_join(tinfo[0].thread_id, &res);
+	if (s != 0){
+		fprintf (stderr, "Error while join the thread 1\n");
+		exit (EXIT_FAILURE);
+	}
+
+	free(res);
+
+	s = pthread_join(tinfo[1].thread_id, &res);
+	if (s != 0){
+		fprintf (stderr, "Error while join the thread 2\n");
+		exit (EXIT_FAILURE);
+	}
+
+	free(res);
+	
+	pcap_dump_close(pd_inout);
+	pcap_dump_close(pd_out);
+
+	pcap_close(handle_inout);
+	pcap_close(handle_out);
+	return 0;
+}
