@@ -62,7 +62,6 @@ return;
 void sig_handler(int signo)
 {
 	if (signo == SIGINT){
-
 		printf ("Got SIGINT. Call pcap_breakloop.\n");
 		pcap_breakloop(tinfo[0].handler);
 		pcap_breakloop(tinfo[1].handler);
@@ -137,7 +136,6 @@ int main(int argc, char **argv)
 
 	/* Making pcap filenames */
 	strcpy(pcap_inout_filename, argv[2]);
-
 	strcpy(pcap_out_filename, argv[3]);
 
 	/* open capture device */
@@ -172,7 +170,6 @@ int main(int argc, char **argv)
 		exit (EXIT_FAILURE);
 	}
 	
-
 	/* Init pthread attributes */
 	s = pthread_attr_init(&attr);
 	if (s != 0){
@@ -186,7 +183,6 @@ int main(int argc, char **argv)
 		fprintf (stderr, "Can't alloca memory (calloc) for tinfo structure");
 		exit (EXIT_FAILURE);
 	}
-
 
 	/* Start threads */
 	tinfo[0].thread_num = 1;
@@ -231,7 +227,6 @@ int main(int argc, char **argv)
 	
 	pcap_dump_close(pd_inout);
 	pcap_dump_close(pd_out);
-
 	pcap_close(handle_inout);
 	pcap_close(handle_out);
 	return 0;
