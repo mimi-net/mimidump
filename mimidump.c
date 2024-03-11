@@ -71,16 +71,16 @@ void sig_handler(int signo)
 static void *thread_handle_inout_packets (void * arg)
 {
 	struct thread_info *tinfo = arg;
-	
-	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (char *)tinfo->pd);
-	return 0;	
+
+	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
+	return 0;
 }
 
 static void *thread_handle_out_packets (void * arg)
 {
 	struct thread_info *tinfo = arg;
 
-	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (char *)tinfo->pd);
+	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
 	return 0;
 }
 
@@ -116,27 +116,22 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	if (strlen(argv[1]) > IFSZ) {
-		fprintf(stderr, "Invalid interface name.\n");
+	if (strlcpy(dev, argv[1], sizeof(dev)) >= sizeof(dev)) {
+		fprintf(stderr, "error: Invalid interface name.\n");
 		exit(EXIT_FAILURE);
 	}
-
-	if (strlen(argv[2]) > PCAP_FILENAME_SIZE){
-		fprintf(stderr, "Invalid filename len.\n");
-		exit(EXIT_FAILURE);
-	}
-
-	if (strlen(argv[3]) > PCAP_FILENAME_SIZE){
-		fprintf(stderr, "Invalid filename len.\n");
-		exit(EXIT_FAILURE);
-	}
-
-
-	strcpy(dev, argv[1]);
 
 	/* Making pcap filenames */
-	strcpy(pcap_inout_filename, argv[2]);
-	strcpy(pcap_out_filename, argv[3]);
+
+	if (strlcpy(pcap_inout_filename, argv[2], sizeof(pcap_inout_filename)) >= sizeof(pcap_inout_filename)) {
+		fprintf(stderr, "error: Invalid inout filename len.\n");
+		exit(EXIT_FAILURE);
+	}
+
+	if (strlcpy(pcap_out_filename, argv[3], sizeof(pcap_out_filename)) >= sizeof(pcap_out_filename)) {
+		fprintf(stderr, "error: Invalid out filename len.\n");
+		exit(EXIT_FAILURE);
+	}
 
 	/* open capture device */
 	handle_inout = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
