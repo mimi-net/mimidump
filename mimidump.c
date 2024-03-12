@@ -52,7 +52,7 @@ void print_app_usage(void)
 	printf("Options:\n");
 	printf("    interface		Listen on <interface> for packets.\n");
 	printf("    inout_pcap_file	Where to write IN/OUT raw packets.\n");
-	printf("    out_pcap_file	Where to write only OUT raw packets.\n");	
+	printf("    out_pcap_file	Where to write only OUT raw packets.\n");
 	printf("\n");
 
 return;
@@ -61,7 +61,7 @@ return;
 /* Signal handler */
 void sig_handler(int signo)
 {
-	if (signo == SIGINT){
+	if (signo == SIGINT) {
 		printf ("Got SIGINT. Call pcap_breakloop.\n");
 		pcap_breakloop(tinfo[0].handler);
 		pcap_breakloop(tinfo[1].handler);
@@ -71,16 +71,16 @@ void sig_handler(int signo)
 static void *thread_handle_inout_packets (void * arg)
 {
 	struct thread_info *tinfo = arg;
-	
-	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (char *)tinfo->pd);
-	return 0;	
+
+	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
+	return 0;
 }
 
 static void *thread_handle_out_packets (void * arg)
 {
 	struct thread_info *tinfo = arg;
 
-	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (char *)tinfo->pd);
+	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
 	return 0;
 }
 
@@ -104,39 +104,34 @@ int main(int argc, char **argv)
 
 
 	/* Set SIGINT handler */
-	if (signal(SIGINT, sig_handler) == SIG_ERR){
+	if (signal(SIGINT, sig_handler) == SIG_ERR) {
 		fprintf (stderr, "Can't catch SIGINT\n");
 		exit (EXIT_FAILURE);
 	}
 
 	/* check for capture device name on command-line */
 	if (argc < 4) {	
-		fprintf(stderr, "error: Invalid command-line options\n\n");
+		fprintf(stderr, "Invalid command-line options count\n\n");
 		print_app_usage();
 		exit(EXIT_FAILURE);
 	}
 
-	if (strlen(argv[1]) > IFSZ) {
+	if (strlcpy(dev, argv[1], sizeof(dev)) >= sizeof(dev)) {
 		fprintf(stderr, "Invalid interface name.\n");
 		exit(EXIT_FAILURE);
 	}
 
-	if (strlen(argv[2]) > PCAP_FILENAME_SIZE){
-		fprintf(stderr, "Invalid filename len.\n");
-		exit(EXIT_FAILURE);
-	}
-
-	if (strlen(argv[3]) > PCAP_FILENAME_SIZE){
-		fprintf(stderr, "Invalid filename len.\n");
-		exit(EXIT_FAILURE);
-	}
-
-
-	strcpy(dev, argv[1]);
-
 	/* Making pcap filenames */
-	strcpy(pcap_inout_filename, argv[2]);
-	strcpy(pcap_out_filename, argv[3]);
+
+	if (strlcpy(pcap_inout_filename, argv[2], sizeof(pcap_inout_filename)) >= sizeof(pcap_inout_filename)) {
+		fprintf(stderr, "Invalid inout filename len.\n");
+		exit(EXIT_FAILURE);
+	}
+
+	if (strlcpy(pcap_out_filename, argv[3], sizeof(pcap_out_filename)) >= sizeof(pcap_out_filename)) {
+		fprintf(stderr, "Invalid out filename len.\n");
+		exit(EXIT_FAILURE);
+	}
 
 	/* open capture device */
 	handle_inout = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
@@ -172,14 +167,14 @@ int main(int argc, char **argv)
 	
 	/* Init pthread attributes */
 	s = pthread_attr_init(&attr);
-	if (s != 0){
+	if (s != 0) {
 		fprintf (stderr, "pthread_attr_init error\n");
 		exit (EXIT_FAILURE);
 	}
 
 	/* Allocate memory for pthread_create() arguments. */
 	tinfo = calloc(num_threads, sizeof(*tinfo));
-	if (tinfo == NULL){
+	if (tinfo == NULL) {
 		fprintf (stderr, "Can't alloca memory (calloc) for tinfo structure");
 		exit (EXIT_FAILURE);
 	}
@@ -191,7 +186,7 @@ int main(int argc, char **argv)
 	tinfo[0].pd = pd_inout;
 	s = pthread_create(&tinfo[0].thread_id, &attr, &thread_handle_inout_packets, &tinfo[0]);
 
-	if (s != 0){
+	if (s != 0) {
 		fprintf (stderr, "Can't create thread_handle_inout_packets\n");
 		exit (EXIT_FAILURE);
 	}
@@ -202,7 +197,7 @@ int main(int argc, char **argv)
 	tinfo[1].pd = pd_out;
 	s = pthread_create(&tinfo[1].thread_id, &attr, &thread_handle_out_packets, &tinfo[1]);
 
-	if (s != 0){
+	if (s != 0) {
 		fprintf (stderr, "Can't create thread_handle_out_packets\n");
 		exit (EXIT_FAILURE);
 	}
@@ -210,7 +205,7 @@ int main(int argc, char **argv)
 	/* Now join with each thread, and display its returned value. */
 
 	s = pthread_join(tinfo[0].thread_id, &res);
-	if (s != 0){
+	if (s != 0) {
 		fprintf (stderr, "Error while join the thread 1\n");
 		exit (EXIT_FAILURE);
 	}
@@ -218,7 +213,7 @@ int main(int argc, char **argv)
 	free(res);
 
 	s = pthread_join(tinfo[1].thread_id, &res);
-	if (s != 0){
+	if (s != 0) {
 		fprintf (stderr, "Error while join the thread 2\n");
 		exit (EXIT_FAILURE);
 	}
