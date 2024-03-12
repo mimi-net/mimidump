@@ -1,8 +1,14 @@
 # mimidump
 Packet sniffer for miminet
 
-# Make
-gcc mimidump.c -l pcap -o mimidump
+## Build
 
-# Example
+```sh
+make
+```
+
+## Usage example
+
+```sh
 sudo ./mimidump eth0 eth0.pcap eth0_out.pcap
+```
