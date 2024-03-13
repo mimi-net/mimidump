@@ -12,6 +12,7 @@ all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
 	$(CC) -o $@ $^ $(LDFLAGS) $(LDLIBS)
+	cp $@ /usr/bin/ 
 
 $(OBJECTS): %.o: %.c
 	$(CC) -c $< -o $@ $(CFLAGS)
