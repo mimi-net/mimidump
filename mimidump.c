@@ -51,12 +51,13 @@ struct thread_info  *tinfo;
  */
 void print_app_usage(void)
 {
-	printf("Usage: %s interface inout_pcap_file out_pcap_file\n", APP_NAME);
+	printf("Usage: %s interface inout_pcap_file out_pcap_file <filter>\n", APP_NAME);
 	printf("\n");
 	printf("Options:\n");
 	printf("    interface		Listen on <interface> for packets.\n");
 	printf("    inout_pcap_file	Where to write IN/OUT raw packets.\n");
 	printf("    out_pcap_file	Where to write only OUT raw packets.\n");
+	printf("    <filter>		Tcpdump like filter string.\n");
 	printf("\n");
 
 return;
