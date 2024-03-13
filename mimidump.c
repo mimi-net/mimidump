@@ -29,6 +29,10 @@
 /* Max number of packet to be captured */
 #define MAX_PACKET_CAPTURE 100
 
+/* Max lenght of packet filter string */
+#define MAX_FILTER_STRING 512
+
+
 /* Define thread info structure */
 struct thread_info
 {	
@@ -89,10 +93,13 @@ int main(int argc, char **argv)
 {
 	char dev[IFSZ];
 	char errbuf[PCAP_ERRBUF_SIZE];
+	char filter_string[MAX_FILTER_STRING];
 	pcap_t *handle_inout;
 	pcap_t *handle_out;
 	pcap_dumper_t *pd_inout;       			/* pointer to the dump file */
 	pcap_dumper_t *pd_out;       			/* pointer to the dump file */
+
+	struct bpf_program bprog;			/* compiled bpf filter program */
 
 	char pcap_inout_filename[PCAP_FILENAME_SIZE];
 	char pcap_out_filename[PCAP_FILENAME_SIZE];
@@ -121,8 +128,33 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	/* Making pcap filenames */
+	filter_string[0] = '\0';
 
+	/* Read filters */
+	/* Be sure you have not less 4 arguments */
+	for (int i = 4; i < argc; i++) {
+
+		unsigned int pos = strlen(filter_string);
+		size_t len = strlen(argv[i]);
+
+		/* Do we have a room for another one argument? */
+		if ((MAX_FILTER_STRING - len - pos)<=0) {
+			fprintf(stderr, "Filter string is too long. Must be less than 512 symbols\n");
+			exit (EXIT_FAILURE);
+		}
+
+		// Copy a whitespace
+		if (pos > 0) {
+			memcpy(&filter_string[pos], " \0", 2);
+			pos++;
+		}
+		
+		memcpy (&filter_string[pos], argv[i], len);
+		filter_string[pos+len]='\0';
+	}
+
+
+	/* Making pcap filenames */
 	if (strlcpy(pcap_inout_filename, argv[2], sizeof(pcap_inout_filename)) >= sizeof(pcap_inout_filename)) {
 		fprintf(stderr, "Invalid inout filename len.\n");
 		exit(EXIT_FAILURE);
@@ -149,6 +181,31 @@ int main(int argc, char **argv)
 	/* set direction IN */
 	pcap_setdirection(handle_inout, PCAP_D_INOUT);
 	pcap_setdirection(handle_out, PCAP_D_OUT);
+
+
+	/* Set filters */
+	if (pcap_compile(handle_inout, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
+                fprintf(stderr, "Error compiling IN/OUT bpf filter on\n");
+                exit(EXIT_FAILURE);
+        }
+	
+	if (pcap_setfilter(handle_inout, &bprog) < 0) {
+                fprintf(stderr, "Error installing IN/OUT bpf filter\n");
+                exit(EXIT_FAILURE);
+        }
+
+
+	if (pcap_compile(handle_out, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
+                fprintf(stderr, "Error compiling OUT bpf filter on\n");
+                exit(EXIT_FAILURE);
+        }
+
+
+	if (pcap_setfilter(handle_out, &bprog) < 0) {
+                fprintf(stderr, "Error installing OUT bpf filter\n");
+                exit(EXIT_FAILURE);
+        }
+
 
 	/*
 	 * Open dump device for writing packet capture data.
