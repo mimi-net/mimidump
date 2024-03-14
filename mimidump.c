@@ -6,6 +6,7 @@
 #include <pcap.h>
 #include <stdio.h>
 #include <string.h>
+#include <bsd/string.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <errno.h>
