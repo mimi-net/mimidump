@@ -1,0 +1,30 @@
+name: Build source code
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: 
+          [
+            ubuntu-22.04,
+            ubuntu-20.04,
+          ]
+        compiler: [gcc, clang]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install pcap and libbsd
+        run: |
+          sudo apt update
+          sudo apt install -y libpcap-dev libbsd-dev
+      - name: Build sources
+        run: make CC=${{ matrix.compiler }}
+      - name: Install and check utility
+        run: |
+          sudo make prefix=/usr install
+          /usr/bin/mimidump || [ "$?" == 1 ]
