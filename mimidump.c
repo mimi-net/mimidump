@@ -37,11 +37,11 @@
 struct thread_info
 {
 	/* Arg for thread_start() */
-	pthread_t thread_id;      /* ID returned from pthread_create() */
-	int thread_num;           /* thread number */
-	pcap_t *handler;          /* pcap handler */
-	pcap_dumper_t *pd;        /* pcap dump to file handler */
-	unsigned int num_packets; /* max number of packets to be captures */
+	pthread_t thread_id; /* ID returned from pthread_create() */
+	int thread_num;      /* thread number */
+	pcap_t *handler;     /* pcap handler */
+	pcap_dumper_t *pd;   /* pcap dump to file handler */
+	int num_packets;     /* max number of packets to be captures */
 };
 
 struct thread_info *tinfo;
@@ -59,8 +59,6 @@ void print_app_usage(void)
 	printf("    out_pcap_file	Where to write only OUT raw packets.\n");
 	printf("    <filter>		Tcpdump like filter string.\n");
 	printf("\n");
-
-	return;
 }
 
 /* Signal handler */
