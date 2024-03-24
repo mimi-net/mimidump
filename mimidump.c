@@ -5,8 +5,6 @@
 
 #include <arpa/inet.h>
 #include <bsd/string.h>
-#include <ctype.h>
-#include <errno.h>
 #include <netinet/in.h>
 #include <pcap.h>
 #include <stdio.h>
