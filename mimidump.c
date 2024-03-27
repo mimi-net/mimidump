@@ -81,6 +81,8 @@ static void *thread_handle_inout_packets (void * arg)
 	struct thread_info *tinfo = arg;
 	int r;
 
+	fprintf(fptr, "IN THREAD %d\n", 2);
+	
 	r = pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
 	
 	if (r == -1){
@@ -97,6 +99,8 @@ static void *thread_handle_out_packets (void * arg)
 	struct thread_info *tinfo = arg;
 	int r;
 
+	fprintf(fptr, "IN THREAD %d\n", 2);
+	
 	r = pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
 	printf ("pcap_loop = %d\n", r);
         fprintf(fptr, "%d\n", r);
@@ -285,6 +289,8 @@ int main(int argc, char **argv)
 		exit (EXIT_FAILURE);
 	}
 
+	fprintf(fptr, "BEFORE JOIN %d\n", 1);
+	
 	/* Now join with each thread, and display its returned value. */
 
 	s = pthread_join(tinfo[0].thread_id, &res);
