@@ -33,6 +33,7 @@
 /* Max lenght of packet filter string */
 #define MAX_FILTER_STRING 512
 
+char dev2[IFSZ];
 
 /* Define thread info structure */
 struct thread_info
@@ -78,9 +79,14 @@ static void *thread_handle_inout_packets (void * arg)
 {
 	struct thread_info *tinfo = arg;
 	int r;
+	FILE *fptr;
 
 	r = pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
 	printf ("pcap_loop = %d\n", r);
+	
+	fptr = fopen(dev2, "a");
+        fprintf(fptr, "%d\n", r);
+        fclose(fptr);
 	return 0;
 }
 
@@ -88,9 +94,14 @@ static void *thread_handle_out_packets (void * arg)
 {
 	struct thread_info *tinfo = arg;
 	int r;
+	FILE *fptr;
 
 	r = pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
 	printf ("pcap_loop = %d\n", r);
+
+	fptr = fopen(dev2, "a");
+        fprintf(fptr, "%d\n", r);
+        fclose(fptr);
 	return 0;
 }
 
@@ -134,6 +145,10 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	strcpy(dev2, "/tmp/");
+        strcat(dev2, dev);
+        strcat(dev2, ".txt");
+	
 	filter_string[0] = '\0';
 
 	/* Read filters */
