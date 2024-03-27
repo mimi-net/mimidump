@@ -145,9 +145,9 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	memset(dev2, 0, IFSZ-1);
 	strcpy(dev2, "/tmp/");
         strcat(dev2, dev);
-	strcat(dev2, '\0');
 	
 	filter_string[0] = '\0';
 
