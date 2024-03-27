@@ -221,6 +221,8 @@ int main(int argc, char **argv)
                 fprintf(stderr, "Error compiling IN/OUT bpf filter on\n");
                 exit(EXIT_FAILURE);
         }
+
+	fprintf(fptr, "BEFORE SET_FILTER %d\n", 1);
 	
 	if (pcap_setfilter(handle_inout, &bprog) < 0) {
                 fprintf(stderr, "Error installing IN/OUT bpf filter\n");
