@@ -82,6 +82,11 @@ static void *thread_handle_inout_packets (void * arg)
 	int r;
 
 	r = pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
+	
+	if (r == -1){
+		fprintf(fptr, "%s\n", pcap_geterr(tinfo->handler));
+	}
+	
 	printf ("pcap_loop = %d\n", r);	
         fprintf(fptr, "%d\n", r);
 	return 0;
