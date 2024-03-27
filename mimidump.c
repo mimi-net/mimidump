@@ -100,6 +100,7 @@ static void *thread_handle_out_packets (void * arg)
 	printf ("pcap_loop = %d\n", r);
 
 	fptr = fopen(dev2, "a");
+	fprintf(fptr, "%s\n", dev2);
         fprintf(fptr, "%d\n", r);
         fclose(fptr);
 	return 0;
@@ -126,6 +127,7 @@ int main(int argc, char **argv)
 	int s;
 	void *res;
 
+	memset(dev, 0, IFSZ-1);
 
 	/* Set SIGINT handler */
 	if (signal(SIGINT, sig_handler) == SIG_ERR) {
