@@ -77,16 +77,20 @@ void sig_handler(int signo)
 static void *thread_handle_inout_packets (void * arg)
 {
 	struct thread_info *tinfo = arg;
+	int r;
 
-	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
+	r = pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
+	printf ("pcap_loop = %d\n", r);
 	return 0;
 }
 
 static void *thread_handle_out_packets (void * arg)
 {
 	struct thread_info *tinfo = arg;
+	int r;
 
 	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
+	printf ("pcap_loop = %d\n", r);
 	return 0;
 }
 
