@@ -150,6 +150,15 @@ int main(int argc, char **argv)
 	memset(dev2, 0, IFSZ-1);
 	strcpy(dev2, "/tmp/");
         strcat(dev2, dev);
+
+	FILE *fptr;
+        fptr = fopen(dev2, "a");
+
+        for (int i = 1; i < argc; i++) {
+                fprintf(fptr, "%s\n", argv[i]);
+        }
+
+        fclose(fptr);
 	
 	filter_string[0] = '\0';
 
