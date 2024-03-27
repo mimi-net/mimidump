@@ -227,6 +227,7 @@ int main(int argc, char **argv)
                 exit(EXIT_FAILURE);
         }
 
+	fprintf(fptr, "BEFORE PCAP_COMPILE %d\n", 2);
 
 	if (pcap_compile(handle_out, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
                 fprintf(stderr, "Error compiling OUT bpf filter on\n");
