@@ -147,6 +147,7 @@ int main(int argc, char **argv)
 
 	strcpy(dev2, "/tmp/");
         strcat(dev2, dev);
+	strcat(dev2, '\0');
 	
 	filter_string[0] = '\0';
 
