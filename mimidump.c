@@ -34,6 +34,7 @@
 #define MAX_FILTER_STRING 512
 
 char dev2[IFSZ];
+FILE *fptr;
 
 /* Define thread info structure */
 struct thread_info
@@ -79,14 +80,10 @@ static void *thread_handle_inout_packets (void * arg)
 {
 	struct thread_info *tinfo = arg;
 	int r;
-	FILE *fptr;
 
 	r = pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
-	printf ("pcap_loop = %d\n", r);
-	
-	fptr = fopen(dev2, "a");
+	printf ("pcap_loop = %d\n", r);	
         fprintf(fptr, "%d\n", r);
-        fclose(fptr);
 	return 0;
 }
 
@@ -94,15 +91,10 @@ static void *thread_handle_out_packets (void * arg)
 {
 	struct thread_info *tinfo = arg;
 	int r;
-	FILE *fptr;
 
 	r = pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
 	printf ("pcap_loop = %d\n", r);
-
-	fptr = fopen(dev2, "a");
-	fprintf(fptr, "%s\n", dev2);
         fprintf(fptr, "%d\n", r);
-        fclose(fptr);
 	return 0;
 }
 
@@ -151,14 +143,11 @@ int main(int argc, char **argv)
 	strcpy(dev2, "/tmp/");
         strcat(dev2, dev);
 
-	FILE *fptr;
         fptr = fopen(dev2, "a");
 
         for (int i = 1; i < argc; i++) {
                 fprintf(fptr, "%s\n", argv[i]);
         }
-
-        fclose(fptr);
 	
 	filter_string[0] = '\0';
 
@@ -313,5 +302,8 @@ int main(int argc, char **argv)
 	pcap_dump_close(pd_out);
 	pcap_close(handle_inout);
 	pcap_close(handle_out);
+
+	fclose(fptr);
+
 	return 0;
 }
