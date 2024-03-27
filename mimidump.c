@@ -81,7 +81,7 @@ static void *thread_handle_inout_packets (void * arg)
 	struct thread_info *tinfo = arg;
 	int r;
 
-	fprintf(fptr, "IN THREAD %d\n", 2);
+	fprintf(fptr, "IN THREAD %d\n", 1);
 	
 	r = pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
 	
@@ -195,6 +195,8 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	fprintf(fptr, "BEFORE PCAP_OPEN_LIVE %d\n", 1);
+	
 	/* open capture device */
 	handle_inout = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
 	if (handle_inout == NULL) {
@@ -212,6 +214,7 @@ int main(int argc, char **argv)
 	pcap_setdirection(handle_inout, PCAP_D_INOUT);
 	pcap_setdirection(handle_out, PCAP_D_OUT);
 
+	fprintf(fptr, "BEFORE PCAP_COMPILE %d\n", 1);
 
 	/* Set filters */
 	if (pcap_compile(handle_inout, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
@@ -236,6 +239,7 @@ int main(int argc, char **argv)
                 exit(EXIT_FAILURE);
         }
 
+	fprintf(fptr, "BEFORE PCAP_DUMP_OPEN %d\n", 1);
 
 	/*
 	 * Open dump device for writing packet capture data.
@@ -265,6 +269,8 @@ int main(int argc, char **argv)
 		fprintf (stderr, "Can't alloca memory (calloc) for tinfo structure");
 		exit (EXIT_FAILURE);
 	}
+
+	fprintf(fptr, "BEFORE THREAD_START %d\n", 1);
 
 	/* Start threads */
 	tinfo[0].thread_num = 1;
