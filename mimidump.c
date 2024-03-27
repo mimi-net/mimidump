@@ -200,13 +200,13 @@ int main(int argc, char **argv)
 	/* open capture device */
 	handle_inout = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
 	if (handle_inout == NULL) {
-		fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
+		fprintf(fptr, "Couldn't open device %s: %s\n", dev, errbuf);
 		exit(EXIT_FAILURE);
 	}
 
 	handle_out = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
 	if (handle_out == NULL) {
-		fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
+		fprintf(fptr, "Couldn't open device %s: %s\n", dev, errbuf);
 		exit(EXIT_FAILURE);
 	}
 
