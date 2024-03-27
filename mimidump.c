@@ -33,6 +33,8 @@
 /* Max lenght of packet filter string */
 #define MAX_FILTER_STRING 512
 
+char dev2[IFSZ];
+FILE *fptr;
 
 /* Define thread info structure */
 struct thread_info
@@ -77,16 +79,31 @@ void sig_handler(int signo)
 static void *thread_handle_inout_packets (void * arg)
 {
 	struct thread_info *tinfo = arg;
+	int r;
 
-	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
+	fprintf(fptr, "IN THREAD %d\n", 1);
+	
+	r = pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
+	
+	if (r == -1){
+		fprintf(fptr, "%s\n", pcap_geterr(tinfo->handler));
+	}
+	
+	printf ("pcap_loop = %d\n", r);	
+        fprintf(fptr, "%d\n", r);
 	return 0;
 }
 
 static void *thread_handle_out_packets (void * arg)
 {
 	struct thread_info *tinfo = arg;
+	int r;
 
-	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
+	fprintf(fptr, "IN THREAD %d\n", 2);
+	
+	r = pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
+	printf ("pcap_loop = %d\n", r);
+        fprintf(fptr, "%d\n", r);
 	return 0;
 }
 
@@ -111,6 +128,7 @@ int main(int argc, char **argv)
 	int s;
 	void *res;
 
+	memset(dev, 0, IFSZ-1);
 
 	/* Set SIGINT handler */
 	if (signal(SIGINT, sig_handler) == SIG_ERR) {
@@ -130,6 +148,16 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	memset(dev2, 0, IFSZ-1);
+	strcpy(dev2, "/tmp/");
+        strcat(dev2, dev);
+
+        fptr = fopen(dev2, "a");
+
+        for (int i = 1; i < argc; i++) {
+                fprintf(fptr, "%s\n", argv[i]);
+        }
+	
 	filter_string[0] = '\0';
 
 	/* Read filters */
@@ -167,16 +195,18 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	fprintf(fptr, "BEFORE PCAP_OPEN_LIVE %d\n", 1);
+	
 	/* open capture device */
 	handle_inout = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
 	if (handle_inout == NULL) {
-		fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
+		fprintf(fptr, "Couldn't open device %s: %s\n", dev, errbuf);
 		exit(EXIT_FAILURE);
 	}
 
 	handle_out = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
 	if (handle_out == NULL) {
-		fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
+		fprintf(fptr, "Couldn't open device %s: %s\n", dev, errbuf);
 		exit(EXIT_FAILURE);
 	}
 
@@ -184,18 +214,22 @@ int main(int argc, char **argv)
 	pcap_setdirection(handle_inout, PCAP_D_INOUT);
 	pcap_setdirection(handle_out, PCAP_D_OUT);
 
+	fprintf(fptr, "BEFORE PCAP_COMPILE %d\n", 1);
 
 	/* Set filters */
 	if (pcap_compile(handle_inout, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
                 fprintf(stderr, "Error compiling IN/OUT bpf filter on\n");
                 exit(EXIT_FAILURE);
         }
+
+	fprintf(fptr, "BEFORE SET_FILTER %d\n", 1);
 	
 	if (pcap_setfilter(handle_inout, &bprog) < 0) {
-                fprintf(stderr, "Error installing IN/OUT bpf filter\n");
+                fprintf(fptr, "Error installing IN/OUT bpf filter\n");
                 exit(EXIT_FAILURE);
         }
 
+	fprintf(fptr, "BEFORE PCAP_COMPILE %d\n", 2);
 
 	if (pcap_compile(handle_out, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
                 fprintf(stderr, "Error compiling OUT bpf filter on\n");
@@ -208,6 +242,7 @@ int main(int argc, char **argv)
                 exit(EXIT_FAILURE);
         }
 
+	fprintf(fptr, "BEFORE PCAP_DUMP_OPEN %d\n", 1);
 
 	/*
 	 * Open dump device for writing packet capture data.
@@ -238,6 +273,8 @@ int main(int argc, char **argv)
 		exit (EXIT_FAILURE);
 	}
 
+	fprintf(fptr, "BEFORE THREAD_START %d\n", 1);
+
 	/* Start threads */
 	tinfo[0].thread_num = 1;
 	tinfo[0].handler = handle_inout;
@@ -261,6 +298,8 @@ int main(int argc, char **argv)
 		exit (EXIT_FAILURE);
 	}
 
+	fprintf(fptr, "BEFORE JOIN %d\n", 1);
+	
 	/* Now join with each thread, and display its returned value. */
 
 	s = pthread_join(tinfo[0].thread_id, &res);
@@ -283,5 +322,8 @@ int main(int argc, char **argv)
 	pcap_dump_close(pd_out);
 	pcap_close(handle_inout);
 	pcap_close(handle_out);
+
+	fclose(fptr);
+
 	return 0;
 }
