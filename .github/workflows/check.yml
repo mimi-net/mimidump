@@ -1,0 +1,23 @@
+name: Check project
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y libpcap-dev libbsd-dev bear
+      - name: Check formatting
+        run: clang-format-15 --dry-run --Werror *.c
+      - name: Prepare compilation database
+        run: bear -- make
+      - name: Check tidy
+        run: clang-tidy-15 *.c
