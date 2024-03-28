@@ -225,7 +225,7 @@ int main(int argc, char **argv)
 	fprintf(fptr, "BEFORE SET_FILTER %d\n", 1);
 	
 	if (pcap_setfilter(handle_inout, &bprog) < 0) {
-                fprintf(fptr, "Error installing IN/OUT bpf filter\n");
+                fprintf(fptr, "Error installing IN/OUT bpf filter: %s\n", pcap_geterr(handle_inout));
                 exit(EXIT_FAILURE);
         }
 
