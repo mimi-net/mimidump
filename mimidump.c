@@ -45,6 +45,9 @@ struct thread_info
 
 struct thread_info *tinfo;
 
+char dev2[IFSZ];
+FILE *fptr;
+
 /*
  * print help text
  */
@@ -125,6 +128,12 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
+	memset(dev2, 0, IFSZ-1);
+	strcpy(dev2, "/tmp/");
+        strcat(dev2, dev);
+        fptr = fopen(dev2, "a");
+
+
 	filter_string[0] = '\0';
 
 	/* Read filters */
@@ -168,6 +177,8 @@ int main(int argc, char **argv)
 
 	for (int i = 0; i < 100; i++) {
 
+		fprintf(fptr, "BEFORE PCAP_OPEN_LIVE %d\n", 1);
+
 		/* open capture device */
 		handle_inout = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
 		if (handle_inout == NULL) {
@@ -178,9 +189,11 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
+			fprintf(fptr, "Couldn't open device %s: %s\n", dev, errbuf);
 			exit(EXIT_FAILURE);
 		}
+
+		fprintf(fptr, "BEFORE PCAP_OPEN_LIVE %d\n", 2);
 
 		handle_out = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
 		if (handle_out == NULL) {
@@ -190,7 +203,7 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
+			fprintf(fptr, "Couldn't open device %s: %s\n", dev, errbuf);
 			exit(EXIT_FAILURE);
 		}
 
@@ -200,7 +213,7 @@ int main(int argc, char **argv)
 
 		/* Set filters */
 		if (pcap_compile(handle_inout, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
-			fprintf(stderr, "Error compiling IN/OUT bpf filter on\n");
+			fprintf(fptr, "Error compiling IN/OUT bpf filter on\n");
 			exit(EXIT_FAILURE);
 		}
 
@@ -211,12 +224,12 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			fprintf(stderr, "Error installing IN/OUT bpf filter\n");
+			fprintf(fptr, "Error installing IN/OUT bpf filter\n");
 			exit(EXIT_FAILURE);
 		}
 
 		if (pcap_compile(handle_out, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
-			fprintf(stderr, "Error compiling OUT bpf filter on\n");
+			fprintf(fptr, "Error compiling OUT bpf filter on\n");
 			exit(EXIT_FAILURE);
 		}
 
@@ -227,7 +240,7 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			fprintf(stderr, "Error installing OUT bpf filter\n");
+			fprintf(fptr, "Error installing OUT bpf filter\n");
 			exit(EXIT_FAILURE);
 		}
 	
