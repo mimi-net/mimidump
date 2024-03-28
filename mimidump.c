@@ -12,6 +12,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #include <pthread.h>
 #include <signal.h>
@@ -101,6 +102,7 @@ int main(int argc, char **argv)
 	char pcap_out_filename[PCAP_FILENAME_SIZE];
 
 	pthread_attr_t attr;
+	unsigned int mSleep = 100000;	/* Sleep 0.1 second */
 	size_t num_threads = 2;
 	int s;
 	void *res;
@@ -159,42 +161,78 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	/* open capture device */
-	handle_inout = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
-	if (handle_inout == NULL) {
-		fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
-		exit(EXIT_FAILURE);
-	}
+	/* At some point mimidump starts when interface already exists, but not activated.
+	 * Try to sleep and then try again.
+	 * By default we try 100 times with 0.1 sec. sleep interval
+	 */
 
-	handle_out = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
-	if (handle_out == NULL) {
-		fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
-		exit(EXIT_FAILURE);
-	}
+	for (int i = 0; i < 100; i++) {
 
-	/* set direction IN */
-	pcap_setdirection(handle_inout, PCAP_D_INOUT);
-	pcap_setdirection(handle_out, PCAP_D_OUT);
+		/* open capture device */
+		handle_inout = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
+		if (handle_inout == NULL) {
+			
+			/* If device is not up, sleep 0.1 second and try again */
+			if (strstr(errbuf, "device is not up") != NULL) {
+				usleep(mSleep);
+				continue;
+			}
 
-	/* Set filters */
-	if (pcap_compile(handle_inout, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
-		fprintf(stderr, "Error compiling IN/OUT bpf filter on\n");
-		exit(EXIT_FAILURE);
-	}
+			fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
+			exit(EXIT_FAILURE);
+		}
 
-	if (pcap_setfilter(handle_inout, &bprog) < 0) {
-		fprintf(stderr, "Error installing IN/OUT bpf filter\n");
-		exit(EXIT_FAILURE);
-	}
+		handle_out = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
+		if (handle_out == NULL) {
 
-	if (pcap_compile(handle_out, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
-		fprintf(stderr, "Error compiling OUT bpf filter on\n");
-		exit(EXIT_FAILURE);
-	}
+			if (strstr(errbuf, "device is not up") != NULL) {
+				usleep(mSleep);
+				continue;
+			}
 
-	if (pcap_setfilter(handle_out, &bprog) < 0) {
-		fprintf(stderr, "Error installing OUT bpf filter\n");
-		exit(EXIT_FAILURE);
+			fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
+			exit(EXIT_FAILURE);
+		}
+
+		/* set direction IN */
+		pcap_setdirection(handle_inout, PCAP_D_INOUT);
+		pcap_setdirection(handle_out, PCAP_D_OUT);
+
+		/* Set filters */
+		if (pcap_compile(handle_inout, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
+			fprintf(stderr, "Error compiling IN/OUT bpf filter on\n");
+			exit(EXIT_FAILURE);
+		}
+
+		if (pcap_setfilter(handle_inout, &bprog) < 0) {
+			
+			if (strstr(errbuf, "Network is down") != NULL) {
+				usleep(mSleep);
+				continue;
+			}
+
+			fprintf(stderr, "Error installing IN/OUT bpf filter\n");
+			exit(EXIT_FAILURE);
+		}
+
+		if (pcap_compile(handle_out, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
+			fprintf(stderr, "Error compiling OUT bpf filter on\n");
+			exit(EXIT_FAILURE);
+		}
+
+		if (pcap_setfilter(handle_out, &bprog) < 0) {
+
+			if (strstr(errbuf, "Network is down") != NULL) {
+				usleep(mSleep);
+				continue;
+			}
+
+			fprintf(stderr, "Error installing OUT bpf filter\n");
+			exit(EXIT_FAILURE);
+		}
+	
+		/* All looks good */
+		break;
 	}
 
 	/*
