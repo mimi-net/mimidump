@@ -133,7 +133,6 @@ int main(int argc, char **argv)
         strcat(dev2, dev);
         fptr = fopen(dev2, "a");
 
-
 	filter_string[0] = '\0';
 
 	/* Read filters */
@@ -211,6 +210,8 @@ int main(int argc, char **argv)
 		pcap_setdirection(handle_inout, PCAP_D_INOUT);
 		pcap_setdirection(handle_out, PCAP_D_OUT);
 
+		fprintf(fptr, "BEFORE PCAP_COMPILE %d\n", 1);
+		
 		/* Set filters */
 		if (pcap_compile(handle_inout, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
 			fprintf(fptr, "Error compiling IN/OUT bpf filter on\n");
@@ -218,15 +219,19 @@ int main(int argc, char **argv)
 		}
 
 		if (pcap_setfilter(handle_inout, &bprog) < 0) {
-			
+
+			sprintf(errbuf, "%s", pcap_geterr(handle_inout));
+					
 			if (strstr(errbuf, "Network is down") != NULL) {
 				usleep(mSleep);
 				continue;
 			}
 
-			fprintf(fptr, "Error installing IN/OUT bpf filter\n");
+			fprintf(fptr, "Error installing IN/OUT bpf filter: %s\n", errbuf);
 			exit(EXIT_FAILURE);
 		}
+
+		fprintf(fptr, "BEFORE PCAP_COMPILE %d\n", 2);
 
 		if (pcap_compile(handle_out, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
 			fprintf(fptr, "Error compiling OUT bpf filter on\n");
@@ -235,12 +240,14 @@ int main(int argc, char **argv)
 
 		if (pcap_setfilter(handle_out, &bprog) < 0) {
 
+			sprintf(errbuf, "%s", pcap_geterr(handle_out));
+
 			if (strstr(errbuf, "Network is down") != NULL) {
 				usleep(mSleep);
 				continue;
 			}
 
-			fprintf(fptr, "Error installing OUT bpf filter\n");
+			fprintf(fptr, "Error installing OUT bpf filter: %s\n", errbuf);
 			exit(EXIT_FAILURE);
 		}
 	
