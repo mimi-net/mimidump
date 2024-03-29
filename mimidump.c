@@ -45,9 +45,6 @@ struct thread_info
 
 struct thread_info *tinfo;
 
-char dev2[IFSZ];
-FILE *fptr;
-
 /*
  * print help text
  */
@@ -73,15 +70,7 @@ void sig_handler(int signo)
 	}
 }
 
-static void *thread_handle_inout_packets(void *arg)
-{
-	struct thread_info *tinfo = arg;
-
-	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
-	return 0;
-}
-
-static void *thread_handle_out_packets(void *arg)
+static void *thread_handle_packets(void *arg)
 {
 	struct thread_info *tinfo = arg;
 
@@ -128,11 +117,6 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	memset(dev2, 0, IFSZ-1);
-	strcpy(dev2, "/tmp/");
-        strcat(dev2, dev);
-        fptr = fopen(dev2, "a");
-
 	filter_string[0] = '\0';
 
 	/* Read filters */
@@ -176,8 +160,6 @@ int main(int argc, char **argv)
 
 	for (int i = 0; i < 100; i++) {
 
-		fprintf(fptr, "BEFORE PCAP_OPEN_LIVE %d\n", 1);
-
 		/* open capture device */
 		handle_inout = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
 		if (handle_inout == NULL) {
@@ -188,11 +170,9 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			fprintf(fptr, "Couldn't open device %s: %s\n", dev, errbuf);
+			fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
 			exit(EXIT_FAILURE);
 		}
-
-		fprintf(fptr, "BEFORE PCAP_OPEN_LIVE %d\n", 2);
 
 		handle_out = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
 		if (handle_out == NULL) {
@@ -202,7 +182,7 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			fprintf(fptr, "Couldn't open device %s: %s\n", dev, errbuf);
+			fprintf(stderr, "Couldn't open device %s: %s\n", dev, errbuf);
 			exit(EXIT_FAILURE);
 		}
 
@@ -210,11 +190,9 @@ int main(int argc, char **argv)
 		pcap_setdirection(handle_inout, PCAP_D_INOUT);
 		pcap_setdirection(handle_out, PCAP_D_OUT);
 
-		fprintf(fptr, "BEFORE PCAP_COMPILE %d\n", 1);
-		
 		/* Set filters */
 		if (pcap_compile(handle_inout, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
-			fprintf(fptr, "Error compiling IN/OUT bpf filter on\n");
+			fprintf(stderr, "Error compiling IN/OUT bpf filter on\n");
 			exit(EXIT_FAILURE);
 		}
 
@@ -227,14 +205,12 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			fprintf(fptr, "Error installing IN/OUT bpf filter: %s\n", errbuf);
+			fprintf(stderr, "Error installing IN/OUT bpf filter: %s\n", errbuf);
 			exit(EXIT_FAILURE);
 		}
 
-		fprintf(fptr, "BEFORE PCAP_COMPILE %d\n", 2);
-
 		if (pcap_compile(handle_out, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
-			fprintf(fptr, "Error compiling OUT bpf filter on\n");
+			fprintf(stderr, "Error compiling OUT bpf filter on\n");
 			exit(EXIT_FAILURE);
 		}
 
@@ -247,7 +223,7 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			fprintf(fptr, "Error installing OUT bpf filter: %s\n", errbuf);
+			fprintf(stderr, "Error installing OUT bpf filter: %s\n", errbuf);
 			exit(EXIT_FAILURE);
 		}
 	
@@ -288,7 +264,7 @@ int main(int argc, char **argv)
 	tinfo[0].handler = handle_inout;
 	tinfo[0].num_packets = MAX_PACKET_CAPTURE;
 	tinfo[0].pd = pd_inout;
-	s = pthread_create(&tinfo[0].thread_id, &attr, &thread_handle_inout_packets, &tinfo[0]);
+	s = pthread_create(&tinfo[0].thread_id, &attr, &thread_handle_packets, &tinfo[0]);
 
 	if (s != 0) {
 		fprintf(stderr, "Can't create thread_handle_inout_packets\n");
@@ -299,7 +275,7 @@ int main(int argc, char **argv)
 	tinfo[1].handler = handle_out;
 	tinfo[1].num_packets = MAX_PACKET_CAPTURE;
 	tinfo[1].pd = pd_out;
-	s = pthread_create(&tinfo[1].thread_id, &attr, &thread_handle_out_packets, &tinfo[1]);
+	s = pthread_create(&tinfo[1].thread_id, &attr, &thread_handle_packets, &tinfo[1]);
 
 	if (s != 0) {
 		fprintf(stderr, "Can't create thread_handle_out_packets\n");
@@ -330,3 +306,4 @@ int main(int argc, char **argv)
 	pcap_close(handle_out);
 	return 0;
 }
+
