@@ -94,7 +94,7 @@ int main(int argc, char **argv)
 	char pcap_out_filename[PCAP_FILENAME_SIZE];
 
 	pthread_attr_t attr;
-	unsigned int mSleep = 100000;	/* Sleep 0.1 second */
+	unsigned int mSleep = 100000; /* Sleep 0.1 second */
 	size_t num_threads = 2;
 	int s;
 	void *res;
@@ -163,7 +163,7 @@ int main(int argc, char **argv)
 		/* open capture device */
 		handle_inout = pcap_open_live(dev, SNAP_LEN, 1, 1000, errbuf);
 		if (handle_inout == NULL) {
-			
+
 			/* If device is not up, sleep 0.1 second and try again */
 			if (strstr(errbuf, "device is not up") != NULL) {
 				usleep(mSleep);
@@ -199,7 +199,7 @@ int main(int argc, char **argv)
 		if (pcap_setfilter(handle_inout, &bprog) < 0) {
 
 			sprintf(errbuf, "%s", pcap_geterr(handle_inout));
-					
+
 			if (strstr(errbuf, "Network is down") != NULL) {
 				usleep(mSleep);
 				continue;
@@ -226,7 +226,7 @@ int main(int argc, char **argv)
 			fprintf(stderr, "Error installing OUT bpf filter: %s\n", errbuf);
 			exit(EXIT_FAILURE);
 		}
-	
+
 		/* All looks good */
 		break;
 	}
@@ -306,4 +306,3 @@ int main(int argc, char **argv)
 	pcap_close(handle_out);
 	return 0;
 }
-
