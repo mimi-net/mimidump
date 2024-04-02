@@ -19,9 +19,6 @@
 #include <signal.h>
 #include <sys/poll.h>
 
-/* Max len of filename for the packet store */
-#define PCAP_FILENAME_SIZE 512
-
 /* Max number of packet to be captured */
 #define MAX_PACKET_CAPTURE 100
 
@@ -42,18 +39,32 @@
 /* timeout to wait interface up in sec */
 #define IFUP_TIMEOUT_S 1
 
-/* Define thread info structure */
-struct thread_info
+/**
+ * @brief Structure describing captor based on pcap.
+ * @struct
+ */
+struct captor
 {
-	/* Arg for thread_start() */
-	pthread_t thread_id; /* ID returned from pthread_create() */
-	int thread_num;      /* thread number */
-	pcap_t *handler;     /* pcap handler */
-	pcap_dumper_t *pd;   /* pcap dump to file handler */
-	int num_packets;     /* max number of packets to be captures */
+	pcap_t *handle;           /* live capture handle */
+	pcap_dumper_t *dump;      /* pcap dump file */
+	struct bpf_program bprog; /* compiled packages filter */
 };
 
-struct thread_info *tinfo;
+/**
+ * @brief Thread info structure. An argument for pthread_create(...).
+ * @struct
+ */
+struct thread_info
+{
+	struct captor captor; /* captor */
+	pthread_t thread_id;  /* ID returned from pthread_create() */
+	int thread_num;       /* thread number */
+	int num_packets;      /* max number of packets to be captures */
+};
+
+#define NUM_THREADS 2
+static const size_t num_threads = NUM_THREADS;
+static struct thread_info tinfo[NUM_THREADS];
 
 /*
  * print help text
@@ -75,16 +86,16 @@ void sig_handler(int signo)
 {
 	if (signo == SIGINT) {
 		printf("Got SIGINT. Call pcap_breakloop.\n");
-		pcap_breakloop(tinfo[0].handler);
-		pcap_breakloop(tinfo[1].handler);
+		pcap_breakloop(tinfo[0].captor.handle);
+		pcap_breakloop(tinfo[1].captor.handle);
 	}
 }
 
 static void *thread_handle_packets(void *arg)
 {
-	struct thread_info *tinfo = arg;
+	struct thread_info *local_tinfo = arg;
 
-	pcap_loop(tinfo->handler, tinfo->num_packets, &pcap_dump, (u_char *)tinfo->pd);
+	pcap_loop(local_tinfo->captor.handle, local_tinfo->num_packets, &pcap_dump, (u_char *)local_tinfo->captor.dump);
 	return 0;
 }
 
@@ -264,31 +275,52 @@ static pcap_t *create_pcap_handle_waiting_ifup(const char *dev)
 	return handle;
 }
 
-int main(int argc, char **argv)
+/**
+ * @internal
+ * @brief Initialize captor for interface @p dev.
+ * @param[in, out] cptr pointer to captor
+ * @param[in] dev name of the interface to be captured
+ * @param[in] direction direction that packets will be captured
+ * @param[in] filter_string string for specifying the captor filter program
+ * @param[in] output_filename filename to save pcap dump
+ * @return @p 0 on success and nonzero value on failure.
+ */
+int init_captor(struct captor *cptr,
+                const char *dev,
+                pcap_direction_t direction,
+                const char *filter_string,
+                const char *output_filename)
 {
-	char dev[IF_NAMESIZE];
-	char filter_string[MAX_FILTER_STRING];
-	pcap_t *handle_inout;
-	pcap_t *handle_out;
-	pcap_dumper_t *pd_inout; /* pointer to the dump file */
-	pcap_dumper_t *pd_out;   /* pointer to the dump file */
-
-	struct bpf_program bprog; /* compiled bpf filter program */
-
-	char pcap_inout_filename[PCAP_FILENAME_SIZE];
-	char pcap_out_filename[PCAP_FILENAME_SIZE];
-
-	pthread_attr_t attr;
-	size_t num_threads = 2;
-	int s;
-	void *res;
-
-	/* Set SIGINT handler */
-	if (signal(SIGINT, sig_handler) == SIG_ERR) {
-		fprintf(stderr, "Can't catch SIGINT\n");
-		return EXIT_FAILURE;
+	char *direction_str = direction == PCAP_D_INOUT ? "IN/OUT" : "OUT";
+	cptr->handle = create_pcap_handle_waiting_ifup(dev);
+	if (!cptr->handle) {
+		return 1;
 	}
 
+	printf("Pcap handle for %s captor successfully created\n", direction_str);
+	pcap_setdirection(cptr->handle, direction);
+
+	/* Set filters */
+	if (pcap_compile(cptr->handle, &cptr->bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
+		fprintf(stderr, "Error compiling %s bpf filter on: %s", direction_str, pcap_geterr(cptr->handle));
+		return 1;
+	}
+	if (pcap_setfilter(cptr->handle, &cptr->bprog) < 0) {
+		fprintf(stderr, "Error installing %s bpf filter on: %s", direction_str, pcap_geterr(cptr->handle));
+		return 1;
+	}
+	/*
+	 * Open dump device for writing packet capture data.
+	 */
+	if ((cptr->dump = pcap_dump_open(cptr->handle, output_filename)) == NULL) {
+		fprintf(stderr, "Error opening savefile \"%s\" for writing: %s\n", output_filename, pcap_geterr(cptr->handle));
+		return 1;
+	}
+	return 0;
+}
+
+int main(int argc, char **argv)
+{
 	/* check for capture device name on command-line */
 	if (argc < 4) {
 		fprintf(stderr, "Invalid command-line options count\n\n");
@@ -296,11 +328,13 @@ int main(int argc, char **argv)
 		return EXIT_FAILURE;
 	}
 
+	char dev[IF_NAMESIZE];
 	if (strlcpy(dev, argv[1], sizeof(dev)) >= sizeof(dev)) {
 		fprintf(stderr, "Invalid interface name.\n");
 		return EXIT_FAILURE;
 	}
 
+	char filter_string[MAX_FILTER_STRING];
 	filter_string[0] = '\0';
 
 	/* Read filters */
@@ -326,17 +360,6 @@ int main(int argc, char **argv)
 		filter_string[pos + len] = '\0';
 	}
 
-	/* Making pcap filenames */
-	if (strlcpy(pcap_inout_filename, argv[2], sizeof(pcap_inout_filename)) >= sizeof(pcap_inout_filename)) {
-		fprintf(stderr, "Invalid inout filename len.\n");
-		return EXIT_FAILURE;
-	}
-
-	if (strlcpy(pcap_out_filename, argv[3], sizeof(pcap_out_filename)) >= sizeof(pcap_out_filename)) {
-		fprintf(stderr, "Invalid out filename len.\n");
-		return EXIT_FAILURE;
-	}
-
 #ifdef PCAP_AVAILABLE_1_10
 	// Initialize pcap library
 	char errbuf[PCAP_ERRBUF_SIZE];
@@ -346,107 +369,57 @@ int main(int argc, char **argv)
 	}
 #endif
 
-	handle_inout = create_pcap_handle_waiting_ifup(dev);
-	if (!handle_inout) {
-		return EXIT_FAILURE;
-	}
-	handle_out = create_pcap_handle_waiting_ifup(dev);
-	if (!handle_out) {
-		return EXIT_FAILURE;
-	}
-	printf("Pcap handles are successfully created\n");
-	pcap_setdirection(handle_inout, PCAP_D_INOUT);
-	pcap_setdirection(handle_out, PCAP_D_OUT);
-	/* Set filters */
-	if (pcap_compile(handle_inout, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
-		pcap_perror(handle_inout, "Error compiling IN/OUT bpf filter on");
-		return EXIT_FAILURE;
-	}
-	if (pcap_setfilter(handle_inout, &bprog) < 0) {
-		pcap_perror(handle_inout, "Error installing IN/OUT bpf filter");
-		return EXIT_FAILURE;
-	}
-	if (pcap_compile(handle_out, &bprog, filter_string, 1, PCAP_NETMASK_UNKNOWN) < 0) {
-		pcap_perror(handle_out, "Error compiling OUT bpf filter on");
-		return EXIT_FAILURE;
-	}
-	if (pcap_setfilter(handle_out, &bprog) < 0) {
-		pcap_perror(handle_out, "Error installing OUT bpf filter");
-		return EXIT_FAILURE;
-	}
-
-	/*
-	 * Open dump device for writing packet capture data.
-	 */
-	if ((pd_inout = pcap_dump_open(handle_inout, pcap_inout_filename)) == NULL) {
-		fprintf(
-		  stderr, "Error opening savefile \"%s\" for writing: %s\n", pcap_inout_filename, pcap_geterr(handle_inout));
-		return EXIT_FAILURE;
-	}
-
-	if ((pd_out = pcap_dump_open(handle_out, pcap_out_filename)) == NULL) {
-		fprintf(stderr, "Error opening savefile \"%s\" for writing: %s\n", pcap_out_filename, pcap_geterr(handle_out));
-		return EXIT_FAILURE;
-	}
-
 	/* Init pthread attributes */
-	s = pthread_attr_init(&attr);
-	if (s != 0) {
+	pthread_attr_t attr;
+	int thrc = pthread_attr_init(&attr);
+	if (thrc != 0) {
 		fprintf(stderr, "pthread_attr_init error\n");
 		return EXIT_FAILURE;
 	}
 
-	/* Allocate memory for pthread_create() arguments. */
-	tinfo = calloc(num_threads, sizeof(*tinfo));
-	if (tinfo == NULL) {
-		fprintf(stderr, "Can't alloca memory (calloc) for tinfo structure");
-		return EXIT_FAILURE;
-	}
-
-	/* Start threads */
+	/* Configure threads */
 	tinfo[0].thread_num = 1;
-	tinfo[0].handler = handle_inout;
 	tinfo[0].num_packets = MAX_PACKET_CAPTURE;
-	tinfo[0].pd = pd_inout;
-	s = pthread_create(&tinfo[0].thread_id, &attr, &thread_handle_packets, &tinfo[0]);
-
-	if (s != 0) {
-		fprintf(stderr, "Can't create thread_handle_inout_packets\n");
+	if (init_captor(&tinfo[0].captor, dev, PCAP_D_INOUT, filter_string, argv[2])) {
 		return EXIT_FAILURE;
 	}
-
 	tinfo[1].thread_num = 2;
-	tinfo[1].handler = handle_out;
-	tinfo[1].num_packets = MAX_PACKET_CAPTURE;
-	tinfo[1].pd = pd_out;
-	s = pthread_create(&tinfo[1].thread_id, &attr, &thread_handle_packets, &tinfo[1]);
-
-	if (s != 0) {
-		fprintf(stderr, "Can't create thread_handle_out_packets\n");
+	if (init_captor(&tinfo[1].captor, dev, PCAP_D_OUT, filter_string, argv[3])) {
 		return EXIT_FAILURE;
+	}
+	tinfo[1].num_packets = MAX_PACKET_CAPTURE;
+
+	/* Set SIGINT handler */
+	if (signal(SIGINT, sig_handler) == SIG_ERR) {
+		fprintf(stderr, "Can't catch SIGINT\n");
+		return EXIT_FAILURE;
+	}
+	/* Start threads */
+	for (size_t i = 0; i < num_threads; ++i) {
+		thrc = pthread_create(&tinfo[i].thread_id, &attr, &thread_handle_packets, &tinfo[i]);
+
+		if (thrc != 0) {
+			fprintf(stderr, "Can't create thread_handle_out_packets\n");
+			return EXIT_FAILURE;
+		}
 	}
 
 	/* Now join with each thread, and display its returned value. */
+	for (size_t i = 0; i < num_threads; ++i) {
+		void *res;
+		thrc = pthread_join(tinfo[i].thread_id, &res);
+		if (thrc != 0) {
+			fprintf(stderr, "Error while join the thread 1\n");
+			return EXIT_FAILURE;
+		}
 
-	s = pthread_join(tinfo[0].thread_id, &res);
-	if (s != 0) {
-		fprintf(stderr, "Error while join the thread 1\n");
-		return EXIT_FAILURE;
+		free(res);
 	}
 
-	free(res);
-
-	s = pthread_join(tinfo[1].thread_id, &res);
-	if (s != 0) {
-		fprintf(stderr, "Error while join the thread 2\n");
-		return EXIT_FAILURE;
+	for (size_t i = 0; i < num_threads; ++i) {
+		pcap_dump_close(tinfo[i].captor.dump);
+		pcap_close(tinfo[i].captor.handle);
 	}
 
-	free(res);
-
-	pcap_dump_close(pd_inout);
-	pcap_dump_close(pd_out);
-	pcap_close(handle_inout);
-	pcap_close(handle_out);
-	return 0;
+	return EXIT_SUCCESS;
 }
