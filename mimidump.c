@@ -18,6 +18,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <sys/poll.h>
+#include <sys/timerfd.h>
 
 /* Max number of packet to be captured */
 #define MAX_PACKET_CAPTURE 100
@@ -37,7 +38,7 @@
 #define HANDLE_BUFFER_TIMEOUT 1000
 
 /* timeout to wait interface up in sec */
-#define IFUP_TIMEOUT_S 1
+#define IFUP_TIMEOUT_S 100
 
 /**
  * @brief Structure describing captor based on pcap.
@@ -200,36 +201,54 @@ static int wait_interface_up(const char *dev)
 		fprintf(stderr, "Cannot get interface index by name\n");
 		return -1;
 	}
-	int fd = open_netlink_socket();
-	if (fd < 0) {
+
+	/* Configure netlink socket and timerfd */
+	int netlinkfd = open_netlink_socket();
+	if (netlinkfd < 0) {
 		return -1;
 	}
+	int timerfd = timerfd_create(CLOCK_MONOTONIC, 0);
+	if (timerfd < 0) {
+		fprintf(stderr, "Cannot open timerfd socket\n");
+		close(netlinkfd);
+		return -1;
+	}
+	struct itimerspec timerspec = { .it_interval = { 0, 0 }, { IFUP_TIMEOUT_S, 0 } };
+	timerfd_settime(timerfd, 0, &timerspec, NULL);
 
-	struct pollfd pfds[1] = { { .fd = fd, .events = POLLIN } };
-	for (int i = 0; i < 100; ++i) {
-		int prc = poll(pfds, 1, IFUP_TIMEOUT_S * 1000);
-		int ifup;
-		switch (prc) {
-			case 0:
-				continue;
-			case -1:
-				fprintf(stderr, "Cannot poll netlink socket\n");
-				close(fd);
-				return -1;
-			default:
-				ifup = read_netlink_msg_ifup(fd, ifindex);
-				if (ifup < 0) {
-					close(fd);
-					return -1;
-				} else if (ifup) {
-					close(fd);
-					return 1;
-				}
+	/* Poll netlinkfd and timerfd until interface UP or timeout expired */
+	struct pollfd pfds[] = { { .fd = netlinkfd, .events = POLLIN }, { .fd = timerfd, .events = POLLIN } };
+	struct pollfd *netlinkpfd = pfds, *timerpfd = pfds + 1;
+	int ifup = 0;
+
+	for (;;) {
+		int prc = poll(pfds, sizeof(pfds) / sizeof(pfds[0]), IFUP_TIMEOUT_S * 1000);
+		if (!prc) {
+			continue;
+		}
+		if (prc < 0) {
+			fprintf(stderr, "Cannot poll netlink socket\n");
+			ifup = -1;
+			break;
+		}
+		if (timerpfd->revents & POLLIN) {
+			/* Timeout expired */
+			timerpfd->revents = 0;
+			ifup = 0;
+			break;
+		}
+		if (netlinkpfd->revents & POLLIN) {
+			netlinkpfd->revents = 0;
+			ifup = read_netlink_msg_ifup(netlinkfd, ifindex);
+			if (ifup) {
+				/* Interface UP or error */
 				break;
+			}
 		}
 	}
-	close(fd);
-	return 0;
+	close(netlinkfd);
+	close(timerfd);
+	return ifup;
 }
 
 /**
