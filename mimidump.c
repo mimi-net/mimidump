@@ -88,12 +88,24 @@ static void *thread_handle_packets(void *arg)
 	return 0;
 }
 
+/**
+ * @internal
+ * @brief Configure created pcap capture @p handle with
+ *        promisc mode, snapshot length and buffer timeout before activation.
+ * @param[in, out] handle
+ * @return @p 0 on success and @p PCAP_ERROR_ACTIVATED if @p handle has been activated.
+ */
 static int configure_pcap_handle(pcap_t *handle)
 {
 	return pcap_set_promisc(handle, HANDLE_PROMISC) || pcap_set_snaplen(handle, HANDLE_SNAP_LEN) ||
 	       pcap_set_timeout(handle, HANDLE_BUFFER_TIMEOUT);
 }
 
+/**
+ * @internal
+ * @brief Create and bind netlink socket.
+ * @return socket file descriptor on success and @p -1 on failure.
+ */
 static int open_netlink_socket(void)
 {
 	int fd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
@@ -115,6 +127,13 @@ static int open_netlink_socket(void)
 	return fd;
 }
 
+/**
+ * @internal
+ * @brief Read netlink message from @p fd socket and check interface with index @p ifindex is up.
+ * @param[in] fd netlink socket
+ * @param[in] ifindex network interface name
+ * @return @p -1 on error, positive value if interface become UP and @p 0 else.
+ */
 static int read_netlink_msg_ifup(int fd, int ifindex)
 {
 	struct nlmsghdr buf[8192 / sizeof(struct nlmsghdr)];
@@ -156,6 +175,12 @@ static int read_netlink_msg_ifup(int fd, int ifindex)
 	return 0;
 }
 
+/**
+ * @internal
+ * @brief Wait until interface @p dev become UP or some timeout expired.
+ * @param[in] dev interface name
+ * @return @p -1 on error, positive value if interface become UP and @p 0 else.
+ */
 static int wait_interface_up(const char *dev)
 {
 	printf("Waiting interface %s UP\n", dev);
@@ -196,6 +221,12 @@ static int wait_interface_up(const char *dev)
 	return 0;
 }
 
+/**
+ * @internal
+ * @brief Create, configure and activate pcap live capture handle for @p dev interface.
+ * @param[in] dev interface name
+ * @return Activated handle on success and @p NULL on failure.
+ */
 static pcap_t *create_pcap_handle_waiting_ifup(const char *dev)
 {
 	char errbuf[PCAP_ERRBUF_SIZE];
