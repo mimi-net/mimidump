@@ -2,6 +2,7 @@
 #define APP_DESC "Sniffer for the miminet using libpcap"
 #define APP_COPYRIGHT "Copyright (c) 2024 Ilya Zelenechuk"
 #define APP_DISCLAIMER "THERE IS ABSOLUTELY NO WARRANTY FOR THIS PROGRAM."
+#define APP_AUTHOR "Ilya Zelenchuk, Vladimir Kutuev"
 
 #include <bsd/string.h>
 #include <pcap/pcap.h>
