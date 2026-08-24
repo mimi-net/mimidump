@@ -22,7 +22,7 @@
 #include <sys/timerfd.h>
 
 /* Max number of packet to be captured */
-#define MAX_PACKET_CAPTURE 100
+#define MAX_PACKET_CAPTURE 1000
 
 /* Max lenght of packet filter string */
 #define MAX_FILTER_STRING 512
