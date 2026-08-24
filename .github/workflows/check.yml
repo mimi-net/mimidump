@@ -14,10 +14,10 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y libpcap-dev libbsd-dev bear
+          sudo apt install -y libpcap-dev libbsd-dev bear clang-format clang-tidy
       - name: Check formatting
-        run: clang-format-15 --dry-run --Werror *.c
+        run: clang-format --dry-run --Werror *.c
       - name: Prepare compilation database
         run: bear -- make
       - name: Check tidy
-        run: clang-tidy-15 *.c
+        run: clang-tidy *.c
