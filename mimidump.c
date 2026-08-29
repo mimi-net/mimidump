@@ -7,6 +7,7 @@
 #include <bsd/string.h>
 #include <errno.h>
 #include <pcap/pcap.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -68,6 +69,9 @@ struct thread_info
 static const size_t num_threads = NUM_THREADS;
 static struct thread_info tinfo[NUM_THREADS];
 
+/* Number of capture threads that have entered the capture loop */
+static atomic_uint captors_live = 0;
+
 /*
  * print help text
  */
@@ -99,9 +103,24 @@ static void sig_handler(int signo)
 	}
 }
 
+/**
+ * @internal
+ * @brief Signal that all capture threads are live.
+ * @note Called once from the last capture thread to enter the capture loop.
+ */
+static void emit_readiness(void)
+{
+	/* Single write(2) is signal-safe and atomic for a short line on a pipe. */
+	(void)write(STDERR_FILENO, "READY\n", sizeof("READY\n") - 1);
+}
+
 static void *thread_handle_packets(void *arg)
 {
 	struct thread_info *local_tinfo = arg;
+
+	if (atomic_fetch_add(&captors_live, 1) == num_threads - 1) {
+		emit_readiness();
+	}
 
 	pcap_loop(local_tinfo->captor.handle, local_tinfo->num_packets, &pcap_dump, (u_char *)local_tinfo->captor.dump);
 	return 0;

@@ -29,6 +29,21 @@ sudo make prefix=/usr install
 sudo mimidump eth0 eth0.pcap eth0_out.pcap
 ```
 
+## Readiness signal
+
+Once both per-interface captors (IN/OUT and OUT) have entered the capture loop,
+`mimidump` prints a single `READY` line to **stderr**. Consumers can use it to
+start jobs only after captures are actually live, instead of polling for
+pcap-file existence. Nothing is printed on failure paths, so a missing `READY`
+means the capture never became live.
+
+## BPF filter
+
+The optional 5th argument is a tcpdump-style BPF filter, e.g. `not igmp`.
+Note that it does **not** match IPv6 MLD (ICMPv6 multicast listener reports), so
+`not igmp` alone will not suppress an IPv6 multicast flood — add `and not ip6`
+for IPv4-only networks.
+
 ## Development
 
 ### Automatically format code
